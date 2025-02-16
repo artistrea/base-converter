@@ -1,5 +1,31 @@
+%macro declare_sequence 2
+; %1 = starting value, %2 = number of bytes
+%assign current %1
+%rep %2
+    db current
+    %assign current current + 1
+%endrep
+%endmacro
+
+
 segment .data
 table: db "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
+
+; we can rely on the fact that we know all input chars,
+; their ascii codes and their input counterpart
+; +<>43; /<>47; [0-9]<>[48-57]; =<>61; [A-Z]<>[65-90]; [a-z]<>[97-122];
+decode_table:
+        times 43 db 0x00
+        db 62
+        times (47-44) db 0x00
+        db 63
+        declare_sequence 52, 10
+        times (61-58) db 0x00
+        db 0x00 ; padding here, not sure yet on how to deal with it
+        times (65-62) db 0x00
+        declare_sequence 0, 26
+        times (97-91) db 0x00
+        declare_sequence 26, 26
 
 segment .text
 
@@ -10,7 +36,7 @@ segment .text
 ; being ignored
 ; WARNING: it is the responsibility of the caller to make sure there is
 ; no trash in bytes 2 and 3 in case only 1 or 2 bytes are being encoded
-global base64_encode
+global base64_encode, base64_decode
 
 base64_encode:
         push ebp
@@ -27,14 +53,14 @@ base64_encode:
         ; gerando o aviso "warning: relocation in read-only section `.text'"
         ; mov ecx, table
         ; ^ ao invés disso, utilizamos o seguinte truque para calcular o endereço em runtime
-        call get_runtime_addr
-get_runtime_addr:
-        ; realizando o pop do endereço de retorno para ecx, temos o endereço de `get_runtime_addr`
+        call get_runtime_addr1
+get_runtime_addr1:
+        ; realizando o pop do endereço de retorno para ecx, temos o endereço de `get_runtime_addr1`
         ; em tempo de execução
         pop ecx
-        ; já se sabe o valor do offset `table - get_runtime_addr` em tempo de compilação
+        ; já se sabe o valor do offset `table - get_runtime_addr1` em tempo de compilação
         ; então obtemos o endereço de `table` em tempo de execução
-        add ecx, table - get_runtime_addr
+        add ecx, table - get_runtime_addr1
 
         ; pegando o segundo argumento
         mov edx, [ebp+12]
@@ -91,6 +117,54 @@ fill1:
 encode_ret:
         pop ebp
         ; return already in eax
+
+        ret
+
+base64_decode:
+        ; first param at [ebp + 8], since pushing ebp
+        push ebp
+        mov ebp, esp
+
+        xor eax, eax
+
+        call get_runtime_addr2
+get_runtime_addr2:
+        ; realizando o pop do endereço de retorno para ecx, temos o endereço de `get_runtime_addr2`
+        ; em tempo de execução
+        pop ecx
+        ; já se sabe o valor do offset `decode_table - get_runtime_addr2` em tempo de compilação
+        ; então obtemos o endereço de `decode_table` em tempo de execução
+        add ecx, decode_table - get_runtime_addr2
+
+        mov edx, [ebp + 8]
+        and edx, 0xff
+        movzx edx, byte [ecx + edx]
+        or eax, edx
+
+        mov edx, [ebp + 8]
+        shr edx, 8
+        and edx, 0xff
+        movzx edx, byte [ecx + edx]
+        shl edx, 6
+        or eax, edx
+
+        mov edx, [ebp + 8]
+        shr edx, 16
+        and edx, 0xff
+        movzx edx, byte [ecx + edx]
+        shl edx, 12
+        or eax, edx
+
+        mov edx, [ebp + 8]
+        shr edx, 24
+        and edx, 0xff
+        movzx edx, byte [ecx + edx]
+        shl edx, 18
+        or eax, edx
+
+        pop ebp
+
+        shl eax, 8
 
         ret
 
