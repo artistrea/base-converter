@@ -13,10 +13,10 @@ segment .text
 global base64_encode
 
 base64_encode:
-; Now let's access the arguments directly from the stack
         push ebp
         mov ebp, esp
 
+        ; zerando o registrador de retorno
         xor eax, eax
 
         ; Para termos código independente de posição
@@ -36,12 +36,18 @@ get_runtime_addr:
         ; então obtemos o endereço de `table` em tempo de execução
         add ecx, table - get_runtime_addr
 
-        ;
+        ; pegando o segundo argumento
         mov edx, [ebp+12]
+        ; pegar o primeiro byte (de 3)
         shr edx, 0x12
+        ; pegar apenas os 6 bits menos significativos
         and edx, 0x3f
+        ; pegar o byte correto na tabela com offset edx
+        ; e preenche os outros bits com 0
         movzx edx, byte [ecx + edx]
+        ; posicionando como o primeiro byte (de 4)
         shl edx, 0x18
+        ; adicionando ao resultado de retorno
         or eax, edx
 
         mov edx, [ebp+12]
@@ -51,6 +57,7 @@ get_runtime_addr:
         shl edx, 0x10
         or eax, edx
 
+        ; verificando se o primeiro argumento é 1
         cmp dword [ebp + 8], 1
         je fill2
 
@@ -61,6 +68,7 @@ get_runtime_addr:
         shl edx, 0x8
         or eax, edx
 
+        ; verificando se o primeiro argumento é 2
         cmp dword [ebp + 8], 2
         je fill1
 
