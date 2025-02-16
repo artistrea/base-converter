@@ -3,7 +3,7 @@
 #include <string.h>
 
 // comment if don't want newline to be added in encoding or considered in decoding
-// #define NEWLINE_SPACING 76
+#define NEWLINE_SPACING 76
 
 __attribute__((cdecl))
 extern uint32_t base64_encode(uint32_t n, uint32_t text);
