@@ -4,6 +4,14 @@
 
 # ./bin in.txt out.txt
 
+
+# SE FOR WINDOWS
+ifeq ($(OS),Windows_NT)
+FORMAT = win32
+else
+FORMAT = elf32
+endif
+
 all: exec
 
 exec: main.o base64.o base64.s main.c
@@ -13,7 +21,7 @@ main.o: main.c
 	gcc -m32 -c main.c -o main.o
 
 base64.o: base64.s
-	nasm -f elf32 base64.s -o base64.o
+	nasm -f $(FORMAT) base64.s -o base64.o
 
 # to generate and analyse main.c assembly code
 main_asm:
