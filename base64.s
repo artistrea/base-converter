@@ -1,176 +1,158 @@
 %macro declare_sequence 2
-; %1 = starting value, %2 = number of bytes
+; %1 = valor inicial, %2 = número de bytes
 %assign current %1
 %rep %2
-    db current
-    %assign current current + 1
+    db current          ; Armazena valor na posição atual
+    %assign current current + 1  ; Incrementa para próximo byte
 %endrep
 %endmacro
 
-
 segment .data
+; Tabela Base64 padrão (64 caracteres + padding)
 table: db "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
 
-; we can rely on the fact that we know all input chars,
-; their ascii codes and their input counterpart
-; +<>43; /<>47; [0-9]<>[48-57]; =<>61; [A-Z]<>[65-90]; [a-z]<>[97-122];
+; Tabela de decodificação: mapeia ASCII para valores de 6 bits
+; Estrutura: [0-42] = 0, 43='+'=62, 44-46=0, 47='/'=63, 
+;            [48-57]=52-61, 58-60=0, 61='='=0, 
+;            [65-90]=0-25, [91-96]=0, [97-122]=26-51
 decode_table:
-        times 43 db 0x00
-        db 62
-        times (47-44) db 0x00
-        db 63
-        declare_sequence 52, 10
-        times (61-58) db 0x00
-        db 0x00 ; padding here, not sure yet on how to deal with it
-        times (65-62) db 0x00
-        declare_sequence 0, 26
-        times (97-91) db 0x00
-        declare_sequence 26, 26
+        times 43 db 0x00    ; Caracteres ASCII 0-42 inválidos
+        db 62               ; '+' (ASCII 43) → valor 62
+        times (47-44) db 0x00 ; ASCII 44-46 inválidos
+        db 63               ; '/' (ASCII 47) → valor 63
+        declare_sequence 52, 10  ; Dígitos 0-9 (ASCII 48-57 → valores 52-61)
+        times (61-58) db 0x00    ; ASCII 58-60 inválidos
+        db 0x00            ; Padding para '=' (ASCII 61)
+        times (65-62) db 0x00  ; ASCII 62-64 inválidos
+        declare_sequence 0, 26  ; Letras maiúsculas A-Z (ASCII 65-90 → 0-25)
+        times (97-91) db 0x00   ; ASCII 91-96 inválidos
+        declare_sequence 26, 26 ; Letras minúsculas a-z (ASCII 97-122 → 26-51)
 
 segment .text
 
-; Need to make it global so it can be accessed in another file with extern
-; this function receives (uint32_t, uint32_t)
-; with first parameter being the number of bytes to base64 encode (can be 1 to 3)
-; and the second parameter contains the bytes in big endian order, with the first 8 bits
-; being ignored
-; WARNING: it is the responsibility of the caller to make sure there is
-; no trash in bytes 2 and 3 in case only 1 or 2 bytes are being encoded
+; Torna as funções visíveis para outros arquivos
+global _base64_encode, _base64_decode ; Convenção Windows
+global base64_encode, base64_decode   ; Convenção Unix
 
-; A gente precisa colocar as duas assinaturas, com _ pra windows
-; e sem para unix like
-global _base64_encode, _base64_decode
-global base64_encode, base64_decode
-
+;----------------------------------------------------------
+; Função de codificação Base64
+; Entrada: [ebp+8] = número de bytes (1-3)
+;          [ebp+12] = bytes de entrada (big-endian)
+; Saída: EAX = 4 bytes codificados
+;----------------------------------------------------------
 _base64_encode:
 base64_encode:
         push ebp
         mov ebp, esp
 
-        ; zerando o registrador de retorno
-        xor eax, eax
+        xor eax, eax        ; Limpa registrador de retorno
 
-        ; Para termos código independente de posição
-        ; não podemos simplesmente fazer `mov ecx, table`, pois
-        ; o segmento de texto dependeria de um endereço de memória que não
-        ; se sabe qual em tempo de compilação,
-        ; e o segmento de código, que deveria ser read-only, terá que ser modificado em runtime
-        ; gerando o aviso "warning: relocation in read-only section `.text'"
-        ; mov ecx, table
-        ; ^ ao invés disso, utilizamos o seguinte truque para calcular o endereço em runtime
+        ; ** Calcula endereço da tabela em tempo de execução **
         call get_runtime_addr1
 get_runtime_addr1:
-        ; realizando o pop do endereço de retorno para ecx, temos o endereço de `get_runtime_addr1`
-        ; em tempo de execução
-        pop ecx
-        ; já se sabe o valor do offset `table - get_runtime_addr1` em tempo de compilação
-        ; então obtemos o endereço de `table` em tempo de execução
-        add ecx, table - get_runtime_addr1
+        pop ecx             ; Obtém endereço atual
+        add ecx, table - get_runtime_addr1 ; Ajusta para tabela real
 
-        ; pegando o segundo argumento
-        mov edx, [ebp+12]
-        ; pegar o primeiro byte (de 3)
-        shr edx, 0x12
-        ; pegar apenas os 6 bits menos significativos
-        and edx, 0x3f
-        ; pegar o byte correto na tabela com offset edx
-        ; e preenche os outros bits com 0
-        movzx edx, byte [ecx + edx]
-        ; posicionando como o primeiro byte (de 4)
-        shl edx, 0x18
-        ; adicionando ao resultado de retorno
-        or eax, edx
+        ; Processa primeiro caractere (6 bits superiores)
+        mov edx, [ebp+12]   ; Carrega bytes de entrada
+        shr edx, 0x12       ; Desloca 18 bits à direita (isola bits 23-18)
+        and edx, 0x3f       ; Mantém apenas 6 bits
+        movzx edx, byte [ecx + edx] ; Busca na tabela
+        shl edx, 0x18       ; Posiciona no byte mais significativo
+        or eax, edx         ; Armazena resultado
 
+        ; Processa segundo caractere (próximos 6 bits)
         mov edx, [ebp+12]
-        shr edx, 0xc
+        shr edx, 0xc        ; Desloca 12 bits (isola bits 17-12)
         and edx, 0x3f
         movzx edx, byte [ecx + edx]
-        shl edx, 0x10
+        shl edx, 0x10       ; Posiciona no terceiro byte
         or eax, edx
 
-        ; verificando se o primeiro argumento é 1
+        ; Verifica se precisa de padding
         cmp dword [ebp + 8], 1
-        je fill2
+        je fill2            ; Apenas 1 byte de entrada → 2 paddings
 
+        ; Processa terceiro caractere (bits 11-6)
         mov edx, [ebp+12]
-        shr edx, 0x6
+        shr edx, 0x6        ; Desloca 6 bits
         and edx, 0x3f
         movzx edx, byte [ecx + edx]
-        shl edx, 0x8
+        shl edx, 0x8        ; Posiciona no segundo byte
         or eax, edx
 
-        ; verificando se o primeiro argumento é 2
         cmp dword [ebp + 8], 2
-        je fill1
+        je fill1            ; 2 bytes de entrada → 1 padding
 
+        ; Processa quarto caractere (bits 5-0)
         mov edx, [ebp+12]
-        and edx, 0x3f
+        and edx, 0x3f       ; Isola últimos 6 bits
         movzx edx, byte [ecx + edx]
-        or eax, edx
+        or eax, edx         ; Armazena no último byte
         jmp encode_ret
 
 fill2:
-        ; special char
-        movzx edx, byte [ecx + 0x40]
+        ; ** Adiciona dois caracteres de padding **
+        movzx edx, byte [ecx + 0x40] ; Índice 64 = '='
         shl edx, 0x8
         or eax, edx
 fill1:
-        ; special char
+        ; ** Adiciona um caractere de padding **
         movzx edx, byte [ecx + 0x40]
         or eax, edx
 
 encode_ret:
         pop ebp
-        ; return already in eax
-
         ret
 
+;----------------------------------------------------------
+; Função de decodificação Base64
+; Entrada: [ebp+8] = 4 caracteres codificados
+; Saída: EAX = 3 bytes decodificados (alinhados à esquerda)
+;----------------------------------------------------------
 _base64_decode:
 base64_decode:
-        ; first param at [ebp + 8], since pushing ebp
         push ebp
         mov ebp, esp
 
-        xor eax, eax
+        xor eax, eax        ; Limpa registrador de resultado
 
+        ; ** Calcula endereço da tabela de decodificação **
         call get_runtime_addr2
 get_runtime_addr2:
-        ; realizando o pop do endereço de retorno para ecx, temos o endereço de `get_runtime_addr2`
-        ; em tempo de execução
         pop ecx
-        ; já se sabe o valor do offset `decode_table - get_runtime_addr2` em tempo de compilação
-        ; então obtemos o endereço de `decode_table` em tempo de execução
         add ecx, decode_table - get_runtime_addr2
 
+        ; Processa primeiro caractere (6 bits superiores)
         mov edx, [ebp + 8]
+        and edx, 0xff       ; Isola primeiro byte
+        movzx edx, byte [ecx + edx] ; Decodifica
+        or eax, edx         ; Armazena bits 17-12
+
+        ; Processa segundo caractere (próximos 6 bits)
+        mov edx, [ebp + 8]
+        shr edx, 8          ; Segundo byte
         and edx, 0xff
         movzx edx, byte [ecx + edx]
+        shl edx, 6          ; Posiciona nos bits 11-6
         or eax, edx
 
+        ; Processa terceiro caractere
         mov edx, [ebp + 8]
-        shr edx, 8
+        shr edx, 16         ; Terceiro byte
         and edx, 0xff
         movzx edx, byte [ecx + edx]
-        shl edx, 6
+        shl edx, 12         ; Posiciona nos bits 5-0
         or eax, edx
 
+        ; Processa quarto caractere
         mov edx, [ebp + 8]
-        shr edx, 16
+        shr edx, 24         ; Quarto byte
         and edx, 0xff
         movzx edx, byte [ecx + edx]
-        shl edx, 12
-        or eax, edx
-
-        mov edx, [ebp + 8]
-        shr edx, 24
-        and edx, 0xff
-        movzx edx, byte [ecx + edx]
-        shl edx, 18
+        shl edx, 18         ; Combina todos os bits
         or eax, edx
 
         pop ebp
-
-        shl eax, 8
-
+        shl eax, 8          ; ** Remove bits de padding e alinha resultado **
         ret
-
