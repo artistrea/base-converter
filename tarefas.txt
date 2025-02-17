@@ -1,0 +1,13 @@
+Gustavo:
+	- Encoding e decoding;
+	- Documentação;
+
+Artur Padovesi:
+	- Encoding e decoding;
+	- Consertos e adaptação para linux;
+
+Vanessa:
+	- Consertos e adaptação do código para windows;
+	- Encoding e decoding;
+
+
