@@ -43,8 +43,10 @@ Para compilar é necessário ter gcc e nasm.
 
 ```bash
 make
+# codifica qualquer binario, um jpeg, por exemplo
 # encodes any binary, e.g. an jpeg
 ./bin -e img.jpeg out.txt
+# decodifica base64 para binario
 # decodes base64 to binary
 ./bin -d out.txt img2.jpeg
 ```
