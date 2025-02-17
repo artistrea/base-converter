@@ -1,6 +1,6 @@
-# Codificador/Decodificador Base64 em Assembly IA-32
+# Codificador/Decodificador Base64 em Assembly x86_32
 
-Implementação eficiente de codificação/decodificação Base64 seguindo RFC 4648, escrita em assembly NASM para arquitetura IA-32.
+Implementação eficiente de codificação/decodificação Base64 seguindo RFC 4648, escrita em assembly NASM (x86_32).
 
 ## Características
 
@@ -8,9 +8,10 @@ Implementação eficiente de codificação/decodificação Base64 seguindo RFC 4
 - Código independente de posição com endereçamento dinâmico de tabelas
 - Tratamento de padding (=) para grupos de entrada incompletos
 - Tabela de consulta para decodificação gerada por macro
-- Processamento de entrada em big-endian
 
 ## Compilação
+
+Para compilar é necessário ter gcc e nasm.
 
 ```bash
 make
@@ -34,20 +35,5 @@ Decodificar Base64 para binário:
 
 - Uso de macros para geração de tabelas
 - Cálculo de endereço em tempo de execução para código independente de posição
-- Manipulação de bits para extração de grupos de 6 bits
-
-# Como rodar
-
-Para compilar é necessário ter gcc e nasm.
-
-```bash
-make
-# codifica qualquer binario, um jpeg, por exemplo
-# encodes any binary, e.g. an jpeg
-./bin -e img.jpeg out.txt
-# decodifica base64 para binario
-# decodes base64 to binary
-./bin -d out.txt img2.jpeg
-```
-
+- Manipulação de bits para extração ou geração de grupos de 6 bits na codificação e decodificação respectivamente.
 

@@ -12,9 +12,16 @@ segment .data
 table: db "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
 
 ; Tabela de decodificação: mapeia ASCII para valores de 6 bits
-; Estrutura: [0-42] = 0, 43='+'=62, 44-46=0, 47='/'=63, 
-;            [48-57]=52-61, 58-60=0, 61='='=0, 
-;            [65-90]=0-25, [91-96]=0, [97-122]=26-51
+; Estrutura: [0-42] (padding)
+;            [43]=['+']     <-> 62,
+;            [44-46] (padding)
+;            [47]=['/']     <-> 63,
+;            [48-57]=[0-9]  <-> [52-61],
+;            [58-60] (padding)
+;            [61]=['=']     <-> 0, (tanto faz, responsabilidade do chamador ignorar padding)
+;            [65-90]=[A-B]  <-> [0-25],
+;            [91-96] (padding)
+;            [97-122]=[a-b] <-> [26-51]
 decode_table:
         times 43 db 0x00    ; Caracteres ASCII 0-42 inválidos
         db 62               ; '+' (ASCII 43) → valor 62
@@ -38,7 +45,7 @@ global base64_encode, base64_decode   ; Convenção Unix
 ; Função de codificação Base64
 ; Entrada: [ebp+8] = número de bytes (1-3)
 ;          [ebp+12] = bytes de entrada (big-endian)
-; Saída: EAX = 4 bytes codificados
+; Saída: EAX = 4 bytes codificados (big-endian)
 ;----------------------------------------------------------
 _base64_encode:
 base64_encode:
@@ -108,7 +115,7 @@ encode_ret:
 ;----------------------------------------------------------
 ; Função de decodificação Base64
 ; Entrada: [ebp+8] = 4 caracteres codificados
-; Saída: EAX = 3 bytes decodificados (alinhados à esquerda)
+; Saída: EAX = 3 bytes decodificados (big-endian, com byte menos significativo sempre = 0)
 ;----------------------------------------------------------
 _base64_decode:
 base64_decode:
@@ -127,7 +134,7 @@ get_runtime_addr2:
         mov edx, [ebp + 8]
         and edx, 0xff       ; Isola primeiro byte
         movzx edx, byte [ecx + edx] ; Decodifica
-        or eax, edx         ; Armazena bits 17-12
+        or eax, edx         ; Armazena bits 5-0
 
         ; Processa segundo caractere (próximos 6 bits)
         mov edx, [ebp + 8]
@@ -142,7 +149,7 @@ get_runtime_addr2:
         shr edx, 16         ; Terceiro byte
         and edx, 0xff
         movzx edx, byte [ecx + edx]
-        shl edx, 12         ; Posiciona nos bits 5-0
+        shl edx, 12         ; Posiciona nos bits 17-12
         or eax, edx
 
         ; Processa quarto caractere
@@ -150,9 +157,11 @@ get_runtime_addr2:
         shr edx, 24         ; Quarto byte
         and edx, 0xff
         movzx edx, byte [ecx + edx]
-        shl edx, 18         ; Combina todos os bits
+        shl edx, 18         ; Posiciona nos bits 23-18
         or eax, edx
 
         pop ebp
-        shl eax, 8          ; ** Remove bits de padding e alinha resultado **
+        ; ** Alinha resultado para big endian, adicionando padding = 0 nos bits menos significativos **
+        shl eax, 8
+
         ret
