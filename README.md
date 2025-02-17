@@ -13,8 +13,7 @@ Implementação eficiente de codificação/decodificação Base64 seguindo RFC 4
 ## Compilação
 
 ```bash
-nasm -f elf32 base64.asm -o base64.o
-gcc -m32 -o bin main.c base64.o
+make
 ```
 
 ## Uso
