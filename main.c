@@ -137,7 +137,7 @@ int main(int argc, char* argv[]) {
   }
   
   inptr = fopen(argv[2], "rb");
-  outptr = fopen(argv[3], "w");
+  outptr = fopen(argv[3], "wb");
 
   if (dec) {
     decode(inptr, outptr);

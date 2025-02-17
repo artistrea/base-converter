@@ -36,9 +36,9 @@ segment .text
 ; being ignored
 ; WARNING: it is the responsibility of the caller to make sure there is
 ; no trash in bytes 2 and 3 in case only 1 or 2 bytes are being encoded
-global base64_encode, base64_decode
+global _base64_encode, _base64_decode
 
-base64_encode:
+_base64_encode:
         push ebp
         mov ebp, esp
 
@@ -120,7 +120,7 @@ encode_ret:
 
         ret
 
-base64_decode:
+_base64_decode:
         ; first param at [ebp + 8], since pushing ebp
         push ebp
         mov ebp, esp
