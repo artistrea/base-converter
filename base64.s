@@ -1,5 +1,5 @@
 %macro declare_sequence 2
-; %1 = starting value, %2 = number of bytes
+; %1 = valor inicial, %2 = número de bytes
 %assign current %1
 %rep %2
     db current
@@ -7,12 +7,11 @@
 %endrep
 %endmacro
 
-
 segment .data
 table: db "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
 
-; we can rely on the fact that we know all input chars,
-; their ascii codes and their input counterpart
+; Podemos contar com o fato de que conhecemos todos os caracteres de entrada,
+; seus códigos ascii e suas contrapartes de entrada
 ; +<>43; /<>47; [0-9]<>[48-57]; =<>61; [A-Z]<>[65-90]; [a-z]<>[97-122];
 decode_table:
         times 43 db 0x00
@@ -21,7 +20,7 @@ decode_table:
         db 63
         declare_sequence 52, 10
         times (61-58) db 0x00
-        db 0x00 ; padding here, not sure yet on how to deal with it
+        db 0x00 ; preenchimento aqui, ainda não sei como lidar com isso
         times (65-62) db 0x00
         declare_sequence 0, 26
         times (97-91) db 0x00
@@ -29,16 +28,8 @@ decode_table:
 
 segment .text
 
-; Need to make it global so it can be accessed in another file with extern
-; this function receives (uint32_t, uint32_t)
-; with first parameter being the number of bytes to base64 encode (can be 1 to 3)
-; and the second parameter contains the bytes in big endian order, with the first 8 bits
-; being ignored
-; WARNING: it is the responsibility of the caller to make sure there is
-; no trash in bytes 2 and 3 in case only 1 or 2 bytes are being encoded
-
-; A gente precisa colocar as duas assinaturas, com _ pra windows
-; e sem para unix like
+; Precisa torná-lo global para que possa ser acessado em outro arquivo com extern
+; Precisamos colocar as duas assinaturas, com _ para windows e sem para unix like
 global _base64_encode, _base64_decode
 global base64_encode, base64_decode
 
@@ -52,16 +43,13 @@ base64_encode:
 
         ; Para termos código independente de posição
         ; não podemos simplesmente fazer `mov ecx, table`, pois
-        ; o segmento de texto dependeria de um endereço de memória que não
-        ; se sabe qual em tempo de compilação,
-        ; e o segmento de código, que deveria ser read-only, terá que ser modificado em runtime
+        ; o segmento de texto dependeria de um endereço de memória desconhecido em tempo de compilação,
+        ; e o segmento de código, que deveria ser somente leitura, teria que ser modificado em tempo de execução
         ; gerando o aviso "warning: relocation in read-only section `.text'"
-        ; mov ecx, table
-        ; ^ ao invés disso, utilizamos o seguinte truque para calcular o endereço em runtime
+        ; em vez disso, usamos o seguinte truque para calcular o endereço em tempo de execução
         call get_runtime_addr1
 get_runtime_addr1:
-        ; realizando o pop do endereço de retorno para ecx, temos o endereço de `get_runtime_addr1`
-        ; em tempo de execução
+        ; realizando o pop do endereço de retorno para ecx, temos o endereço de `get_runtime_addr1` em tempo de execução
         pop ecx
         ; já se sabe o valor do offset `table - get_runtime_addr1` em tempo de compilação
         ; então obtemos o endereço de `table` em tempo de execução
@@ -73,7 +61,7 @@ get_runtime_addr1:
         shr edx, 0x12
         ; pegar apenas os 6 bits menos significativos
         and edx, 0x3f
-        ; pegar o byte correto na tabela com offset edx
+        ; pegar o byte correto na tabela com deslocamento edx
         ; e preenche os outros bits com 0
         movzx edx, byte [ecx + edx]
         ; posicionando como o primeiro byte (de 4)
@@ -110,24 +98,24 @@ get_runtime_addr1:
         jmp encode_ret
 
 fill2:
-        ; special char
+        ; caractere especial
         movzx edx, byte [ecx + 0x40]
         shl edx, 0x8
         or eax, edx
 fill1:
-        ; special char
+        ; caractere especial
         movzx edx, byte [ecx + 0x40]
         or eax, edx
 
 encode_ret:
         pop ebp
-        ; return already in eax
+        ; retorno já em eax
 
         ret
 
 _base64_decode:
 base64_decode:
-        ; first param at [ebp + 8], since pushing ebp
+        ; primeiro parâmetro em [ebp + 8], desde o push ebp
         push ebp
         mov ebp, esp
 
@@ -135,8 +123,7 @@ base64_decode:
 
         call get_runtime_addr2
 get_runtime_addr2:
-        ; realizando o pop do endereço de retorno para ecx, temos o endereço de `get_runtime_addr2`
-        ; em tempo de execução
+        ; realizando o pop do endereço de retorno para ecx, temos o endereço de `get_runtime_addr2` em tempo de execução
         pop ecx
         ; já se sabe o valor do offset `decode_table - get_runtime_addr2` em tempo de compilação
         ; então obtemos o endereço de `decode_table` em tempo de execução
@@ -173,4 +160,3 @@ get_runtime_addr2:
         shl eax, 8
 
         ret
-
